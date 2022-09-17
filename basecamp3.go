@@ -2,8 +2,10 @@ package basecamp3
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -50,25 +52,36 @@ func (bc *Basecamp) Authenticate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (bc *Basecamp) ApiReverseProxy(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/import")
+	path := strings.TrimPrefix(r.URL.Path, "/proxy")
 	url := BasecampApiRootURL + path
 	log.Printf("GET %s\n", url)
 	bc.proxyGet(url, w)
 }
 
-func (bc *Basecamp) todos(project int, todolist int) (url string) {
-	return fmt.Sprintf("%s/buckets/%d/todolists/%d/todos.json", BasecampApiRootURL, project, todolist)
+func (bc *Basecamp) get(url string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Balazsgrill's BC3 integration (https://github.com/balazsgrill/basecamp3)")
+	return bc.client.Do(req)
+}
+
+func (bc *Basecamp) jsonGet(url string, value interface{}) error {
+	resp, err := bc.get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	data, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(data))
+	}
+	return json.Unmarshal(data, value)
 }
 
 func (bc *Basecamp) proxyGet(url string, w http.ResponseWriter) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprint(w, err)
-		return
-	}
-	req.Header.Set("User-Agent", "Balazsgrill's BC3 integration (https://github.com/balazsgrill/basecamp)")
-	resp, err := bc.client.Do(req)
+	resp, err := bc.get(url)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		fmt.Fprint(w, err)
