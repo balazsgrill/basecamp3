@@ -3,12 +3,15 @@ package basecamp3
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -27,19 +30,32 @@ type Basecamp struct {
 	oauth  *oauth2.Config
 }
 
-func (bc *Basecamp) verified(code string) error {
-	ctx := context.Background()
+type ContextWithTokenPersistence interface {
+	context.Context
+	oauth2.TokenSource
+	SetToken(*oauth2.Token)
+}
+
+func (bc *Basecamp) getClient(tokensource oauth2.TokenSource) *http.Client {
+	if bc.client == nil {
+		bc.client = oauth2.NewClient(context.Background(), tokensource)
+	}
+	return bc.client
+}
+
+func (bc *Basecamp) verified(ctx ContextWithTokenPersistence, code string) error {
 	tok, err := bc.oauth.Exchange(ctx, code, oauth2.SetAuthURLParam("type", "web_server"))
 	if err != nil {
 		return err
 	}
-	bc.client = bc.oauth.Client(ctx, tok)
+	ctx.SetToken(tok)
+	bc.getClient(bc.oauth.TokenSource(ctx, tok))
 	return nil
 }
 
 func (bc *Basecamp) VerifyRequest(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
-	err := bc.verified(code)
+	err := bc.verified(ReverseProxyRequestContext(w, r), code)
 	if err == nil {
 		fmt.Fprintf(w, "Auth successful")
 	} else {
@@ -55,20 +71,57 @@ func (bc *Basecamp) ApiReverseProxy(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/proxy")
 	url := BasecampApiRootURL + path
 	log.Printf("GET %s\n", url)
-	bc.proxyGet(url, w)
+	bc.proxyGet(ReverseProxyRequestContext(w, r), url, w)
 }
 
-func (bc *Basecamp) get(url string) (*http.Response, error) {
+func extractToken(client *http.Client) *oauth2.Token {
+	t, err := client.Transport.(*oauth2.Transport).Source.Token()
+	if err == nil {
+		return t
+	}
+	return nil
+}
+
+func (bc *Basecamp) get(ctx ContextWithTokenPersistence, url string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "Balazsgrill's BC3 integration (https://github.com/balazsgrill/basecamp3)")
-	return bc.client.Do(req)
+	client := bc.getClient(ctx)
+	t := extractToken(client)
+	if t == nil {
+		// TODO redirect to auth
+		return nil, errors.New("not authenticated")
+	} else {
+		ctx.SetToken(t)
+		return client.Do(req)
+	}
 }
 
-func (bc *Basecamp) jsonGet(url string, value interface{}) error {
-	resp, err := bc.get(url)
+func (bc *Basecamp) getWithRateLimit(ctx ContextWithTokenPersistence, url string) (*http.Response, error) {
+	resp, err := bc.get(ctx, url)
+	if err != nil {
+		return resp, err
+	}
+	if resp.StatusCode == 429 {
+		// API Rate limit
+		waits := resp.Header.Get("Retry-After")
+		wait, err := strconv.Atoi(waits)
+		if err != nil {
+			log.Printf("HTTP 429 received, but no walid Retry-After header was provided (%s)", waits)
+		}
+		time.Sleep(time.Duration(wait) * time.Second)
+		resp, err = bc.get(ctx, url)
+		if err != nil {
+			return resp, err
+		}
+	}
+	return resp, err
+}
+
+func (bc *Basecamp) jsonGet(ctx ContextWithTokenPersistence, url string, value interface{}) error {
+	resp, err := bc.getWithRateLimit(ctx, url)
 	if err != nil {
 		return err
 	}
@@ -80,8 +133,8 @@ func (bc *Basecamp) jsonGet(url string, value interface{}) error {
 	return json.Unmarshal(data, value)
 }
 
-func (bc *Basecamp) proxyGet(url string, w http.ResponseWriter) {
-	resp, err := bc.get(url)
+func (bc *Basecamp) proxyGet(ctx ContextWithTokenPersistence, url string, w http.ResponseWriter) {
+	resp, err := bc.get(ctx, url)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		fmt.Fprint(w, err)
@@ -90,7 +143,6 @@ func (bc *Basecamp) proxyGet(url string, w http.ResponseWriter) {
 	defer resp.Body.Close()
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
-	return
 }
 
 func New(clientID string, clientSecret string, redirectURL string) *Basecamp {
