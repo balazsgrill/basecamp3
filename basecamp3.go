@@ -26,8 +26,9 @@ const (
 )
 
 type Basecamp struct {
-	client *http.Client
-	oauth  *oauth2.Config
+	client          *http.Client
+	oauth           *oauth2.Config
+	TokenPersitence func(w http.ResponseWriter, r *http.Request) ContextWithTokenPersistence
 }
 
 type ContextWithTokenPersistence interface {
@@ -55,7 +56,7 @@ func (bc *Basecamp) verified(ctx ContextWithTokenPersistence, code string) error
 
 func (bc *Basecamp) VerifyRequest(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
-	err := bc.verified(ReverseProxyRequestContext(w, r), code)
+	err := bc.verified(bc.TokenPersitence(w, r), code)
 	if err == nil {
 		fmt.Fprintf(w, "Auth successful")
 	} else {
@@ -71,7 +72,7 @@ func (bc *Basecamp) ApiReverseProxy(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/proxy")
 	url := BasecampApiRootURL + path
 	log.Printf("GET %s\n", url)
-	bc.proxyGet(ReverseProxyRequestContext(w, r), url, w)
+	bc.proxyGet(bc.TokenPersitence(w, r), url, w)
 }
 
 func extractToken(client *http.Client) *oauth2.Token {
@@ -154,6 +155,7 @@ func New(clientID string, clientSecret string, redirectURL string) *Basecamp {
 			Scopes:       []string{},
 			Endpoint:     Endpoint,
 		},
+		TokenPersitence: ReverseProxyRequestContext,
 	}
 }
 
