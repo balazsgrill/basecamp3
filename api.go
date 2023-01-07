@@ -23,6 +23,13 @@ func (bc *Basecamp) Project(ctx ContextWithTokenPersistence, account int, projec
 	return result, err
 }
 
+func (bc *Basecamp) Projects(ctx ContextWithTokenPersistence, account int) ([]Project, error) {
+	url := fmt.Sprintf("%s/%d/projects.json", BasecampApiRootURL, account)
+	var result []Project
+	err := bc.jsonGet(ctx, url, &result)
+	return result, err
+}
+
 func (bc *Basecamp) TodoList(ctx ContextWithTokenPersistence, account int, project int, todolist int) (Todo, error) {
 	url := fmt.Sprintf("%s/%d/buckets/%d/todolists/%d.json", BasecampApiRootURL, account, project, todolist)
 	var result Todo
