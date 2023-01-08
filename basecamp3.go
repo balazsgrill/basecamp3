@@ -159,6 +159,13 @@ func New(clientID string, clientSecret string, redirectURL string) *Basecamp {
 	}
 }
 
+func NewByOauth(oauth *oauth2.Config) *Basecamp {
+	return &Basecamp{
+		oauth:           oauth,
+		TokenPersitence: ReverseProxyRequestContext,
+	}
+}
+
 // ServeLocalhost configures and starts a HTTP server on localhost which can be used to authenticate and query BC.
 // Capable of handling a single BC session, and assumes the redirect URL to be set as http://localhost:<port>/verify
 func ServeLocalhost(port int, clientID string, clientSecret string) {

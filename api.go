@@ -2,14 +2,14 @@ package basecamp3
 
 import "fmt"
 
-func (bc *Basecamp) TodoSet_Lists(ctx ContextWithTokenPersistence, account int, project int, todoset int) ([]Todo, error) {
+func (bc *Basecamp) TodoSet_Lists(ctx ContextWithTokenPersistence, account int, project int, todoset int64) ([]Todo, error) {
 	url := fmt.Sprintf("%s/%d/buckets/%d/todosets/%d/todolists.json", BasecampApiRootURL, account, project, todoset)
 	var result []Todo
 	err := bc.jsonGet(ctx, url, &result)
 	return result, err
 }
 
-func (bc *Basecamp) TodoSet(ctx ContextWithTokenPersistence, account int, project int, todoset int) (TodoSet, error) {
+func (bc *Basecamp) TodoSet(ctx ContextWithTokenPersistence, account int, project int, todoset int64) (TodoSet, error) {
 	url := fmt.Sprintf("%s/%d/buckets/%d/todosets/%d.json", BasecampApiRootURL, account, project, todoset)
 	var result TodoSet
 	err := bc.jsonGet(ctx, url, &result)

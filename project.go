@@ -7,7 +7,7 @@ type Project struct {
 	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
-	Name           string    `json:"natime"`
+	Name           string    `json:"name"`
 	Description    string    `json:"description"`
 	Purpose        string    `json:"purpose"`
 	ClientsEnabled bool      `json:"clients_enabled"`
@@ -25,10 +25,10 @@ type Project struct {
 	} `json:"dock"`
 }
 
-func (p *Project) GetTodoSet() int {
+func (p *Project) GetTodoSet() int64 {
 	for _, dock := range p.Dock {
 		if dock.Name == "todoset" {
-			return int(dock.ID)
+			return dock.ID
 		}
 	}
 	return -1
