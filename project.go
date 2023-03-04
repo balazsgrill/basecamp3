@@ -14,22 +14,32 @@ type Project struct {
 	BookmarkURL    string    `json:"bookmark_url"`
 	URL            string    `json:"url"`
 	AppURL         string    `json:"app_url"`
-	Dock           []struct {
-		ID       int64  `json:"id"`
-		Title    string `json:"title"`
-		Name     string `json:"name"`
-		Enabled  bool   `json:"enabled"`
-		Position int    `json:"position"`
-		URL      string `json:"url"`
-		AppURL   string `json:"app_url"`
-	} `json:"dock"`
+	Dock           []*Dock   `json:"dock"`
+}
+
+type Dock struct {
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Name     string `json:"name"`
+	Enabled  bool   `json:"enabled"`
+	Position int    `json:"position"`
+	URL      string `json:"url"`
+	AppURL   string `json:"app_url"`
+}
+
+func (p *Project) GetDock(dockname string) *Dock {
+	for _, dock := range p.Dock {
+		if dock.Name == dockname {
+			return dock
+		}
+	}
+	return nil
 }
 
 func (p *Project) GetTodoSet() int64 {
-	for _, dock := range p.Dock {
-		if dock.Name == "todoset" {
-			return dock.ID
-		}
+	d := p.GetDock("todoset")
+	if d == nil {
+		return -1
 	}
-	return -1
+	return d.ID
 }
