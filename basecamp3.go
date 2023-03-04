@@ -39,6 +39,9 @@ type ContextWithTokenPersistence interface {
 
 func (bc *Basecamp) getClient(tokensource oauth2.TokenSource) *http.Client {
 	if bc.client == nil {
+		// reset default client to prevent settings to be overwritten by other previously created http clients
+		http.DefaultClient = &http.Client{}
+
 		bc.client = oauth2.NewClient(context.Background(), tokensource)
 	}
 	return bc.client
