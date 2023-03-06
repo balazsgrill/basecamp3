@@ -50,3 +50,10 @@ func (bc *Basecamp) Todos(ctx ContextWithTokenPersistence, account int, project 
 	err := bc.jsonGet(ctx, url, &result)
 	return result, err
 }
+
+func (bc *Basecamp) Todo(ctx ContextWithTokenPersistence, account int, project int, todo int) (Todo, error) {
+	url := fmt.Sprintf("%s/%d/buckets/%d/todos/%d.json", BasecampApiRootURL, account, project, todo)
+	var result Todo
+	err := bc.jsonGet(ctx, url, &result)
+	return result, err
+}
